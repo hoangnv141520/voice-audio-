@@ -16,7 +16,7 @@ from tts import render
 
 def do_plan(text, mode):
     script = plan(text, mode=mode)
-    rows = [[s["idx"], s["speaker"], s["text"]] for s in script]
+    rows = [[s["idx"], s["speaker"], s.get("language") or "", s["text"]] for s in script]
     speakers = sorted({s["speaker"] for s in script})
     hint = "Speakers: " + ", ".join(speakers) + "\nKhai giọng cho từng speaker bên dưới."
     return rows, hint
@@ -55,9 +55,10 @@ def _fill_voices_from_files(files):
 def do_render(script_rows, voice_rows, default_instruct, gap):
     # ponytail: idx từ enumerate, không tin cột idx của Dataframe (leak header/placeholder).
     rows = script_rows.values.tolist() if hasattr(script_rows, "values") else script_rows
-    script = [{"idx": i, "speaker": str(r[1]).strip(), "text": str(r[2]).strip()}
+    script = [{"idx": i, "speaker": str(r[1]).strip(),
+               "language": str(r[2]).strip() or None, "text": str(r[3]).strip()}
               for i, r in enumerate(rows)
-              if len(r) >= 3 and str(r[2]).strip() and str(r[2]).strip().lower() != "text"]
+              if len(r) >= 4 and str(r[3]).strip() and str(r[3]).strip().lower() != "text"]
     if not script:
         raise gr.Error("Script rỗng — bấm 'Tách câu' trước.")
     voices = _parse_voices(voice_rows, default_instruct)
@@ -78,9 +79,10 @@ with gr.Blocks(title="voice-audio") as demo:
             hint = gr.Textbox(label="Speakers", interactive=False)
         with gr.Column():
             script_tbl = gr.Dataframe(
-                headers=["idx", "speaker", "text"],
-                datatype=["number", "str", "str"],
-                label="Script (sửa speaker/text tuỳ ý)", interactive=True, wrap=True)
+                headers=["idx", "speaker", "language", "text"],
+                datatype=["number", "str", "str", "str"],
+                label="Script (sửa speaker/language/text; language trống = tự đoán)",
+                interactive=True, wrap=True)
 
     gr.Markdown("### Giọng — mỗi speaker: upload file mẫu (cloning) HOẶC gõ instruct (design)")
     voice_tbl = gr.Dataframe(
@@ -106,11 +108,14 @@ with gr.Blocks(title="voice-audio") as demo:
 
 def _selfcheck():
     # Dataframe có thể trả header row / placeholder -> parse phải bỏ qua, không crash.
-    rows = [["idx", "speaker", "text"], [0, "narrator", "Câu một."], [1, "alice", ""]]
-    parsed = [{"idx": i, "speaker": str(r[1]).strip(), "text": str(r[2]).strip()}
+    rows = [["idx", "speaker", "language", "text"],
+            [0, "narrator", "vi", "Câu một."], [1, "alice", "", ""]]
+    parsed = [{"idx": i, "speaker": str(r[1]).strip(),
+               "language": str(r[2]).strip() or None, "text": str(r[3]).strip()}
               for i, r in enumerate(rows)
-              if len(r) >= 3 and str(r[2]).strip() and str(r[2]).strip().lower() != "text"]
-    assert parsed == [{"idx": 1, "speaker": "narrator", "text": "Câu một."}], parsed
+              if len(r) >= 4 and str(r[3]).strip() and str(r[3]).strip().lower() != "text"]
+    assert parsed == [{"idx": 1, "speaker": "narrator", "language": "vi",
+                       "text": "Câu một."}], parsed
     d, s = _parse_voices([["speaker", "instruct", "ref"], ["alice", "female", ""]], "male")
     assert s == {"alice": {"instruct": "female"}}, s
     print("selfcheck ok")

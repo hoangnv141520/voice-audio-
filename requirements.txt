@@ -5,3 +5,4 @@ soundfile
 pyyaml
 gradio
 openai   # chỉ cần khi dùng --planner llm
+langdetect

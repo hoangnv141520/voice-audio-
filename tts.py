@@ -61,14 +61,14 @@ def render(script, voices_path="voices.yaml", model=None, voices=None):
     for speaker, segs in by_speaker.items():
         voice = speakers.get(speaker, default_voice)
         kw = _voice_kwargs(voice)
-        # ponytail: voice-design lấy noise ngẫu nhiên mỗi call -> giọng đổi từng câu.
-        # Seed cố định theo tên speaker giữ giọng đồng nhất; speaker khác -> seed khác.
-        speaker_seed = int(voice.get("seed", _stable_seed(speaker)))
         # ref_audio/instruct broadcast theo list text -> nhân bản cho từng câu.
         for i in range(0, len(segs), BATCH):
             chunk = segs[i:i + BATCH]
             texts = [s["text"] for s in chunk]
             call = {k: [v] * len(texts) for k, v in kw.items()}
+            langs = [s.get("language") for s in chunk]
+            if any(langs):
+                call["language"] = langs  # per-câu; None -> model tự đoán câu đó
             try:
                 audios = model.generate(text=texts, **call)
                 for s, a in zip(chunk, audios):
@@ -76,10 +76,10 @@ def render(script, voices_path="voices.yaml", model=None, voices=None):
             except ValueError:
                 # ponytail: 1 câu ra audio rỗng làm OmniVoice nổ .max() cả lô ->
                 # fallback render từng câu để cô lập câu hỏng, bỏ qua nó.
-                for s, text in zip(chunk, texts):
+                for j, (s, text) in enumerate(zip(chunk, texts)):
                     try:
                         audio_by_idx[s["idx"]] = model.generate(
-                            text=[text], **{k: [v[0]] for k, v in call.items()})[0]
+                            text=[text], **{k: [v[j]] for k, v in call.items()})[0]
                     except ValueError:
                         print(f"[skip] segment {s['idx']} render rỗng: {text[:40]!r}")
 

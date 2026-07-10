@@ -44,13 +44,26 @@ def split_sentences(text):
     return out
 
 
+def detect_lang(text):
+    """ISO code cho OmniVoice (vi/en/zh/ja...). None nếu không chắc -> model tự đoán."""
+    try:
+        from langdetect import detect, DetectorFactory
+        DetectorFactory.seed = 0  # ponytail: langdetect non-deterministic -> seed cho ổn định
+        code = detect(text)
+    except Exception:
+        return None
+    # ponytail: langdetect kém với câu NGẮN (<~15 ký tự hay đoán bậy). Sửa tay cột
+    # language trong GUI nếu sai; nâng lên fasttext-lid nếu cần độ chính xác cao.
+    return code.split("-")[0]  # zh-cn/zh-tw -> zh (OmniVoice chỉ có 'zh')
+
+
 def plan_rule(text):
     """Câu có lời thoại (trong ngoặc kép) -> speaker 'speaker1'; còn lại narrator.
     Rule không đoán được TÊN nhân vật -> gán generic, user sửa ở GUI/voices.yaml."""
     out = []
     for i, s in enumerate(split_sentences(text)):
         speaker = "speaker1" if _QUOTE.search(s) else "narrator"
-        out.append({"idx": i, "text": s, "speaker": speaker})
+        out.append({"idx": i, "text": s, "speaker": speaker, "language": detect_lang(s)})
     return out
 
 
@@ -94,5 +107,8 @@ if __name__ == "__main__":
     sp = split_sentences(poem)
     assert len(sp) == 3, sp
     assert sp[1] == "Dòng hai kết phẩy,", sp
+    # Detect ngôn ngữ per-câu (câu đủ dài mới đáng tin).
+    assert detect_lang("Tôi yêu em rất nhiều lắm luôn.") == "vi"
+    assert detect_lang("I really love you so much today.") == "en"
     print(json.dumps(r, ensure_ascii=False, indent=2))
     print("poem ok:", sp)
