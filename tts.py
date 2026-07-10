@@ -66,8 +66,18 @@ def render(script, voices_path="voices.yaml", model=None, voices=None):
             chunk = segs[i:i + BATCH]
             texts = [s["text"] for s in chunk]
             call = {k: [v] * len(texts) for k, v in kw.items()}
-            audios = model.generate(text=texts, **call)
-            for s, a in zip(chunk, audios):
-                audio_by_idx[s["idx"]] = a
+            try:
+                audios = model.generate(text=texts, **call)
+                for s, a in zip(chunk, audios):
+                    audio_by_idx[s["idx"]] = a
+            except ValueError:
+                # ponytail: 1 câu ra audio rỗng làm OmniVoice nổ .max() cả lô ->
+                # fallback render từng câu để cô lập câu hỏng, bỏ qua nó.
+                for s, text in zip(chunk, texts):
+                    try:
+                        audio_by_idx[s["idx"]] = model.generate(
+                            text=[text], **{k: [v[0]] for k, v in call.items()})[0]
+                    except ValueError:
+                        print(f"[skip] segment {s['idx']} render rỗng: {text[:40]!r}")
 
     return [audio_by_idx[i] for i in sorted(audio_by_idx)]
