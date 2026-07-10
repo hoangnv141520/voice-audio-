@@ -1,0 +1,7 @@
+# Từ điển phát âm: từ AI đọc sai -> cách viết để nó đọc đúng.
+# OmniVoice không có phoneme control cho tiếng Việt, nên thay bằng cách-viết-đọc-đúng.
+# Ví dụ:
+#   API: "ây pi ai"
+#   AWS: "ây đắp liu ét"
+#   Kiro: "ki rô"
+#   2025: "hai không hai lăm"

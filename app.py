@@ -9,6 +9,7 @@ import tempfile
 
 import gradio as gr
 
+import tts
 from merge import merge
 from planner import plan
 from tts import render
@@ -43,7 +44,21 @@ def _parse_voices(voice_rows, default_instruct):
     return {"instruct": default_instruct or "female, moderate pitch"}, speakers
 
 
-def do_render(script_rows, voice_rows, default_instruct, speed, gap):
+def _parse_lexicon(lex_rows):
+    """lex_rows: [[từ, cách đọc], ...] -> dict, bỏ dòng header/rỗng."""
+    lex = {}
+    rows = lex_rows.values.tolist() if hasattr(lex_rows, "values") else (lex_rows or [])
+    for row in rows:
+        if len(row) < 2:
+            continue
+        word = (str(row[0]) if row[0] else "").strip()
+        say = (str(row[1]) if row[1] else "").strip()
+        if word and say and word.lower() != "từ":
+            lex[word] = say
+    return lex
+
+
+def do_render(script_rows, voice_rows, lex_rows, default_instruct, speed, gap):
     # ponytail: idx từ enumerate, không tin cột idx của Dataframe (leak header/placeholder).
     rows = script_rows.values.tolist() if hasattr(script_rows, "values") else script_rows
     script = [{"idx": i, "speaker": str(r[1]).strip(),
@@ -52,6 +67,7 @@ def do_render(script_rows, voice_rows, default_instruct, speed, gap):
               if len(r) >= 4 and str(r[3]).strip() and str(r[3]).strip().lower() != "text"]
     if not script:
         raise gr.Error("Script rỗng — bấm 'Tách câu' trước.")
+    tts._LEXICON = _parse_lexicon(lex_rows)  # override từ điển từ GUI
     voices = _parse_voices(voice_rows, default_instruct)
     segments = render(script, voices=voices, speed=float(speed))
     out = tempfile.mktemp(suffix=".wav")
@@ -81,6 +97,11 @@ with gr.Blocks(title="voice-audio") as demo:
         headers=["speaker", "instruct", "ref_audio (đường dẫn)"],
         datatype=["str", "str", "str"],
         label="Voices", interactive=True, row_count=(2, "dynamic"))
+    gr.Markdown("### Từ điển phát âm — từ AI đọc sai -> gõ cách đọc đúng (vd: API -> ây pi ai)")
+    lex_tbl = gr.Dataframe(
+        headers=["từ", "cách đọc"], datatype=["str", "str"],
+        label="Lexicon", interactive=True, row_count=(2, "dynamic"))
+
     with gr.Row():
         default_instruct = gr.Textbox(value="female, moderate pitch",
                                       label="Giọng chung (default)")
@@ -93,7 +114,8 @@ with gr.Blocks(title="voice-audio") as demo:
     status = gr.Textbox(label="Trạng thái", interactive=False)
 
     plan_btn.click(do_plan, [text, planner_mode], [script_tbl, hint])
-    render_btn.click(do_render, [script_tbl, voice_tbl, default_instruct, speed, gap],
+    render_btn.click(do_render,
+                     [script_tbl, voice_tbl, lex_tbl, default_instruct, speed, gap],
                      [out_audio, status])
 
 
@@ -109,6 +131,8 @@ def _selfcheck():
                        "text": "Câu một."}], parsed
     d, s = _parse_voices([["speaker", "instruct", "ref"], ["alice", "female", ""]], "male")
     assert s == {"alice": {"instruct": "female"}}, s
+    lx = _parse_lexicon([["từ", "cách đọc"], ["API", "ây pi ai"], ["", ""]])
+    assert lx == {"API": "ây pi ai"}, lx
     print("selfcheck ok")
 
 
