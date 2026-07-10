@@ -46,9 +46,10 @@ def get_model():
     return _MODEL
 
 
-def render(script, voices_path="voices.yaml", model=None, voices=None):
+def render(script, voices_path="voices.yaml", model=None, voices=None, speed=1.0):
     """script: [{idx,text,speaker}] -> list[np.ndarray] theo đúng thứ tự idx.
-    voices: (default_voice, speakers) override; nếu None thì đọc voices_path."""
+    voices: (default_voice, speakers) override; nếu None thì đọc voices_path.
+    speed: tốc độ đọc chung (>1 nhanh, <1 chậm); segment có 'speed' riêng thì ưu tiên."""
     default_voice, speakers = voices if voices else load_voices(voices_path)
     model = model or get_model()
 
@@ -69,6 +70,7 @@ def render(script, voices_path="voices.yaml", model=None, voices=None):
             langs = [s.get("language") for s in chunk]
             if any(langs):
                 call["language"] = langs  # per-câu; None -> model tự đoán câu đó
+            call["speed"] = [s.get("speed") or speed for s in chunk]  # per-câu > global
             try:
                 audios = model.generate(text=texts, **call)
                 for s, a in zip(chunk, audios):

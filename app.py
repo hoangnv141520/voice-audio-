@@ -43,16 +43,7 @@ def _parse_voices(voice_rows, default_instruct):
     return {"instruct": default_instruct or "female, moderate pitch"}, speakers
 
 
-def _fill_voices_from_files(files):
-    """Upload -> điền bảng Voices: mỗi file = 1 dòng [tên(stem), "", path].
-    Tên nhân vật = tên file (vd alice.wav -> speaker 'alice'); sửa lại cho khớp Script."""
-    import os
-    if not files:
-        return []
-    return [[os.path.splitext(os.path.basename(f.name))[0], "", f.name] for f in files]
-
-
-def do_render(script_rows, voice_rows, default_instruct, gap):
+def do_render(script_rows, voice_rows, default_instruct, speed, gap):
     # ponytail: idx từ enumerate, không tin cột idx của Dataframe (leak header/placeholder).
     rows = script_rows.values.tolist() if hasattr(script_rows, "values") else script_rows
     script = [{"idx": i, "speaker": str(r[1]).strip(),
@@ -62,7 +53,7 @@ def do_render(script_rows, voice_rows, default_instruct, gap):
     if not script:
         raise gr.Error("Script rỗng — bấm 'Tách câu' trước.")
     voices = _parse_voices(voice_rows, default_instruct)
-    segments = render(script, voices=voices)
+    segments = render(script, voices=voices, speed=float(speed))
     out = tempfile.mktemp(suffix=".wav")
     path, dur = merge(segments, out, gap_s=gap)
     return path, f"Xong: {dur:.1f}s, {len(script)} câu."
@@ -84,16 +75,17 @@ with gr.Blocks(title="voice-audio") as demo:
                 label="Script (sửa speaker/language/text; language trống = tự đoán)",
                 interactive=True, wrap=True)
 
-    gr.Markdown("### Giọng — mỗi speaker: upload file mẫu (cloning) HOẶC gõ instruct (design)")
+    gr.Markdown("### Giọng — mỗi speaker: ref_audio (cloning) HOẶC instruct (design). "
+                "Dán đường dẫn file mẫu vào cột ref_audio.")
     voice_tbl = gr.Dataframe(
         headers=["speaker", "instruct", "ref_audio (đường dẫn)"],
         datatype=["str", "str", "str"],
         label="Voices", interactive=True, row_count=(2, "dynamic"))
-    ref_upload = gr.File(label="Upload file mẫu (copy path vào cột ref_audio)",
-                         file_types=["audio"], file_count="multiple")
     with gr.Row():
         default_instruct = gr.Textbox(value="female, moderate pitch",
                                       label="Giọng chung (default)")
+        speed = gr.Slider(0.5, 2.0, value=1.0, step=0.05,
+                          label="Tốc độ đọc (>1 nhanh, <1 chậm)")
         gap = gr.Slider(0, 1, value=0.25, step=0.05, label="Khoảng lặng giữa câu (s)")
 
     render_btn = gr.Button("2. Render", variant="primary")
@@ -101,8 +93,7 @@ with gr.Blocks(title="voice-audio") as demo:
     status = gr.Textbox(label="Trạng thái", interactive=False)
 
     plan_btn.click(do_plan, [text, planner_mode], [script_tbl, hint])
-    ref_upload.upload(_fill_voices_from_files, ref_upload, voice_tbl)
-    render_btn.click(do_render, [script_tbl, voice_tbl, default_instruct, gap],
+    render_btn.click(do_render, [script_tbl, voice_tbl, default_instruct, speed, gap],
                      [out_audio, status])
 
 
