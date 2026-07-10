@@ -27,6 +27,11 @@ def _voice_kwargs(voice):
 
 
 def _load_model():
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA không khả dụng — bạn đang chạy nhầm Python (global, CPU-only) "
+            "thay vì venv. Dùng gui.bat hoặc .venv\\Scripts\\python.exe app.py"
+        )
     return OmniVoice.from_pretrained(MODEL_ID, device_map="cuda:0", dtype=torch.float16)
 
 
