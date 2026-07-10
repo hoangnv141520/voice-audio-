@@ -25,12 +25,17 @@ def do_plan(text, mode):
 def _parse_voices(voice_rows, default_instruct):
     """voice_rows: [[speaker, instruct, ref_audio_path], ...] -> (default, speakers)."""
     speakers = {}
-    for row in voice_rows:
-        name = (row[0] or "").strip()
+    rows = voice_rows.values.tolist() if hasattr(voice_rows, "values") else voice_rows
+    for row in rows:
+        if len(row) < 3:
+            continue
+        name = (str(row[0]) if row[0] else "").strip()
+        if name.lower() == "speaker":  # header row leak
+            continue
         if not name:
             continue
-        instruct = (row[1] or "").strip()
-        ref = (row[2] or "").strip()
+        instruct = (str(row[1]) if row[1] else "").strip()
+        ref = (str(row[2]) if row[2] else "").strip()
         if ref:
             speakers[name] = {"ref_audio": ref}
         elif instruct:
@@ -39,8 +44,11 @@ def _parse_voices(voice_rows, default_instruct):
 
 
 def do_render(script_rows, voice_rows, default_instruct, gap):
-    script = [{"idx": int(r[0]), "speaker": str(r[1]), "text": str(r[2])}
-              for r in script_rows if str(r[2]).strip()]
+    # ponytail: idx từ enumerate, không tin cột idx của Dataframe (leak header/placeholder).
+    rows = script_rows.values.tolist() if hasattr(script_rows, "values") else script_rows
+    script = [{"idx": i, "speaker": str(r[1]).strip(), "text": str(r[2]).strip()}
+              for i, r in enumerate(rows)
+              if len(r) >= 3 and str(r[2]).strip() and str(r[2]).strip().lower() != "text"]
     if not script:
         raise gr.Error("Script rỗng — bấm 'Tách câu' trước.")
     voices = _parse_voices(voice_rows, default_instruct)
@@ -88,5 +96,21 @@ with gr.Blocks(title="voice-audio") as demo:
                      [out_audio, status])
 
 
+def _selfcheck():
+    # Dataframe có thể trả header row / placeholder -> parse phải bỏ qua, không crash.
+    rows = [["idx", "speaker", "text"], [0, "narrator", "Câu một."], [1, "alice", ""]]
+    parsed = [{"idx": i, "speaker": str(r[1]).strip(), "text": str(r[2]).strip()}
+              for i, r in enumerate(rows)
+              if len(r) >= 3 and str(r[2]).strip() and str(r[2]).strip().lower() != "text"]
+    assert parsed == [{"idx": 1, "speaker": "narrator", "text": "Câu một."}], parsed
+    d, s = _parse_voices([["speaker", "instruct", "ref"], ["alice", "female", ""]], "male")
+    assert s == {"alice": {"instruct": "female"}}, s
+    print("selfcheck ok")
+
+
 if __name__ == "__main__":
-    demo.launch(server_name="127.0.0.1", server_port=7860, inbrowser=True)
+    import sys
+    if "--selfcheck" in sys.argv:
+        _selfcheck()
+    else:
+        demo.launch(server_name="127.0.0.1", server_port=7860, inbrowser=True)
