@@ -77,10 +77,15 @@ def plan_llm(text, model=None, base_url=None, api_key=None):
     )
     model = model or os.environ.get("PLANNER_MODEL", "gpt-4o-mini")
     prompt = (
-        "Tách đoạn văn sau thành từng câu. Với mỗi câu, xác định speaker "
-        "(tên nhân vật đang nói, hoặc 'narrator' cho lời dẫn). Trả về JSON "
-        'array [{"idx":int,"text":str,"speaker":str}], không giải thích.\n\n'
-        + text
+        "Tách đoạn văn sau thành từng câu. Với mỗi câu:\n"
+        "- speaker: tên nhân vật đang nói, hoặc 'narrator' cho lời dẫn.\n"
+        "- language: mã ISO (vi/en/zh/ja/ko/fr...).\n"
+        "- text: câu gốc. Nếu câu có cảm xúc rõ, CHÈN tag cảm xúc phù hợp vào "
+        "đầu/giữa câu (chỉ dùng các tag: [laughter] [sigh] [surprise-ah] "
+        "[surprise-oh] [question-en] [dissatisfaction-hnn]). Không có cảm xúc "
+        "rõ thì để nguyên, đừng chèn bừa.\n"
+        'Trả về JSON array [{"idx":int,"speaker":str,"language":str,"text":str}], '
+        "không giải thích.\n\n" + text
     )
     resp = client.chat.completions.create(
         model=model,
@@ -89,7 +94,21 @@ def plan_llm(text, model=None, base_url=None, api_key=None):
         temperature=0,
     )
     data = json.loads(resp.choices[0].message.content)
-    return data if isinstance(data, list) else data.get("segments", data.get("script", []))
+    segs = data if isinstance(data, list) else data.get("segments", data.get("script", []))
+    for s in segs:  # LLM untrusted -> bỏ tag ngoài whitelist OmniVoice
+        s["text"] = _strip_bad_tags(s.get("text", ""))
+    return segs
+
+
+# Tag non-verbal OmniVoice chấp nhận (khớp _NONVERBAL_PATTERN trong model).
+_VALID_TAGS = {"laughter", "sigh", "confirmation-en", "question-en", "question-ah",
+               "question-oh", "question-ei", "question-yi", "surprise-ah",
+               "surprise-oh", "surprise-wa", "surprise-yo", "dissatisfaction-hnn"}
+_TAG = re.compile(r"\[([a-z-]+)\]")
+
+
+def _strip_bad_tags(text):
+    return _TAG.sub(lambda m: m.group(0) if m.group(1) in _VALID_TAGS else "", text).strip()
 
 
 def plan(text, mode="rule", **kw):
@@ -110,5 +129,7 @@ if __name__ == "__main__":
     # Detect ngôn ngữ per-câu (câu đủ dài mới đáng tin).
     assert detect_lang("Tôi yêu em rất nhiều lắm luôn.") == "vi"
     assert detect_lang("I really love you so much today.") == "en"
+    # Sanitize tag LLM: giữ tag hợp lệ, bỏ tag bịa.
+    assert _strip_bad_tags("[laughter] vui [evil] quá [sigh]") == "[laughter] vui  quá [sigh]"
     print(json.dumps(r, ensure_ascii=False, indent=2))
     print("poem ok:", sp)
