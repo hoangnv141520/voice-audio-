@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+_smoke*.wav
+_merge_test.wav
+out.wav
+script.json
+refs/*.wav
+_smoketest.py

@@ -1,0 +1,25 @@
+# Map nhân vật -> giọng. Nhân vật không khai ở đây dùng "default".
+# Hai kiểu: cloning (ref_audio + ref_text) hoặc design (instruct).
+#
+# instruct CHỈ nhận từ trong whitelist (tiếng Anh, cách nhau ", "):
+#   gender: male, female
+#   age: child, teenager, young adult, middle-aged, elderly
+#   pitch: very low/low/moderate/high/very high pitch
+#   accent: american/british/australian/canadian/indian/... accent
+#   style: whisper
+# (hoặc chỉ tiếng Trung, cách nhau bằng dấu phẩy full-width - xem README)
+default:
+  instruct: "female, moderate pitch"
+
+speakers:
+  # Ví dụ cloning:
+  # alice:
+  #   ref_audio: refs/alice.wav
+  #   ref_text: "Transcription of alice reference audio."
+  # Ví dụ design:
+  # bob:
+  #   instruct: "male, low pitch"
+  narrator:
+    instruct: "male, moderate pitch"
+  speaker1:
+    instruct: "female, high pitch"

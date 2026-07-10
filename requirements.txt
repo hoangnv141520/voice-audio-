@@ -1,0 +1,7 @@
+# PyTorch cu124 (cài riêng, không qua file này):
+#   uv pip install "torch>=2.4,<2.7" torchaudio --index-url https://download.pytorch.org/whl/cu124
+omnivoice
+soundfile
+pyyaml
+gradio
+openai   # chỉ cần khi dùng --planner llm
