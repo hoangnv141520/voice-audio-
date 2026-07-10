@@ -30,10 +30,22 @@ def _load_model():
     return OmniVoice.from_pretrained(MODEL_ID, device_map="cuda:0", dtype=torch.float16)
 
 
-def render(script, voices_path="voices.yaml", model=None):
-    """script: [{idx,text,speaker}] -> list[np.ndarray] theo đúng thứ tự idx."""
-    default_voice, speakers = load_voices(voices_path)
-    model = model or _load_model()
+_MODEL = None
+
+
+def get_model():
+    """Load 1 lần, cache module-global (GUI gọi nhiều lần)."""
+    global _MODEL
+    if _MODEL is None:
+        _MODEL = _load_model()
+    return _MODEL
+
+
+def render(script, voices_path="voices.yaml", model=None, voices=None):
+    """script: [{idx,text,speaker}] -> list[np.ndarray] theo đúng thứ tự idx.
+    voices: (default_voice, speakers) override; nếu None thì đọc voices_path."""
+    default_voice, speakers = voices if voices else load_voices(voices_path)
+    model = model or get_model()
 
     # Gom theo speaker để batch các câu cùng giọng.
     by_speaker = defaultdict(list)
