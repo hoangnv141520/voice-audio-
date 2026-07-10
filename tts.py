@@ -61,6 +61,9 @@ def render(script, voices_path="voices.yaml", model=None, voices=None):
     for speaker, segs in by_speaker.items():
         voice = speakers.get(speaker, default_voice)
         kw = _voice_kwargs(voice)
+        # ponytail: voice-design lấy noise ngẫu nhiên mỗi call -> giọng đổi từng câu.
+        # Seed cố định theo tên speaker giữ giọng đồng nhất; speaker khác -> seed khác.
+        speaker_seed = int(voice.get("seed", _stable_seed(speaker)))
         # ref_audio/instruct broadcast theo list text -> nhân bản cho từng câu.
         for i in range(0, len(segs), BATCH):
             chunk = segs[i:i + BATCH]

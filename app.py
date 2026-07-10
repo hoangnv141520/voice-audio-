@@ -43,6 +43,15 @@ def _parse_voices(voice_rows, default_instruct):
     return {"instruct": default_instruct or "female, moderate pitch"}, speakers
 
 
+def _fill_voices_from_files(files):
+    """Upload -> điền bảng Voices: mỗi file = 1 dòng [tên(stem), "", path].
+    Tên nhân vật = tên file (vd alice.wav -> speaker 'alice'); sửa lại cho khớp Script."""
+    import os
+    if not files:
+        return []
+    return [[os.path.splitext(os.path.basename(f.name))[0], "", f.name] for f in files]
+
+
 def do_render(script_rows, voice_rows, default_instruct, gap):
     # ponytail: idx từ enumerate, không tin cột idx của Dataframe (leak header/placeholder).
     rows = script_rows.values.tolist() if hasattr(script_rows, "values") else script_rows
@@ -90,8 +99,7 @@ with gr.Blocks(title="voice-audio") as demo:
     status = gr.Textbox(label="Trạng thái", interactive=False)
 
     plan_btn.click(do_plan, [text, planner_mode], [script_tbl, hint])
-    ref_upload.upload(lambda fs: "\n".join(f.name for f in fs) if fs else "",
-                      ref_upload, hint)
+    ref_upload.upload(_fill_voices_from_files, ref_upload, voice_tbl)
     render_btn.click(do_render, [script_tbl, voice_tbl, default_instruct, gap],
                      [out_audio, status])
 
