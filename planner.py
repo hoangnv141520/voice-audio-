@@ -23,7 +23,15 @@ def _unbalanced(s):
 
 
 def split_sentences(text):
-    raw = [s.strip() for s in _SENT.findall(text) if s.strip()]
+    # Tách theo DÒNG trước (thơ: mỗi dòng 1 segment, dù kết bằng phẩy hay không),
+    # rồi trong mỗi dòng tách tiếp theo dấu câu.
+    raw = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = _SENT.findall(line)
+        raw.extend(p.strip() for p in parts if p.strip()) if parts else raw.append(line)
     # Gộp các mảnh bị cắt giữa lời thoại (?! nằm trong ngoặc kép).
     out, buf = [], ""
     for s in raw:
@@ -81,4 +89,10 @@ if __name__ == "__main__":
     assert len(r) == 3, r
     assert r[1]["speaker"] == "speaker1", r  # câu có ngoặc kép
     assert r[0]["speaker"] == "narrator", r
+    # Thơ: mỗi dòng 1 segment, kể cả dòng kết bằng dấu phẩy (không được nuốt).
+    poem = "Dòng một, chưa hết.\nDòng hai kết phẩy,\nDòng ba hết câu."
+    sp = split_sentences(poem)
+    assert len(sp) == 3, sp
+    assert sp[1] == "Dòng hai kết phẩy,", sp
     print(json.dumps(r, ensure_ascii=False, indent=2))
+    print("poem ok:", sp)
