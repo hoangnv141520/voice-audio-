@@ -35,7 +35,7 @@ def _parse_voices(voice_rows, default_instruct):
         if not name:
             continue
         instruct = (str(row[1]) if row[1] else "").strip()
-        ref = (str(row[2]) if row[2] else "").strip()
+        ref = (str(row[2]) if row[2] else "").strip().strip('"').strip("'")
         if ref:
             speakers[name] = {"ref_audio": ref}
         elif instruct:
