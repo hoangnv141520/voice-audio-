@@ -14,7 +14,7 @@ BATCH = int(os.environ.get("OMNIVOICE_BATCH", "4"))  # 8GB VRAM: 4 an toàn
 def load_voices(path="voices.yaml"):
     with open(path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
-    return cfg.get("default", {"instruct": "neutral, calm"}), cfg.get("speakers", {})
+    return cfg.get("default", {"instruct": "female, moderate pitch"}), cfg.get("speakers", {})
 
 
 _LEXICON = None
@@ -48,7 +48,7 @@ def _voice_kwargs(voice):
         if voice.get("ref_text"):
             kw["ref_text"] = voice["ref_text"]
         return kw
-    return {"instruct": voice.get("instruct", "neutral, calm")}
+    return {"instruct": voice.get("instruct", "female, moderate pitch")}
 
 
 def _load_model():

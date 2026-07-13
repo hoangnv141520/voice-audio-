@@ -116,20 +116,30 @@ def do_render(script_rows, voice_rows, lex_rows, default_instruct, speed, gap):
 
 
 # ponytail: import/export = _save + _load ra file user chọn. reuse format.
-def _voice_preview(voice_rows, default_instruct, speed):
+def _voice_preview(voice_rows, default_instruct, speed, target=""):
+    """Preview 1 câu bằng giọng của speaker `target` (rỗng -> dòng hợp lệ đầu tiên)."""
     from tts import get_model, _voice_kwargs
     rows = _tolist(voice_rows)
+    target = (target or "").strip()
     for r in rows:
-        if len(r) >= 2 and str(r[0]).strip() and str(r[0]).strip().lower() != "speaker":
-            kw = _voice_kwargs({"instruct": str(r[1]) or default_instruct,
-                               "ref_audio": str(r[2]).strip('"').strip("'") if len(r) > 2 else ""})
-            a = get_model().generate(text=["Đây là giọng nói của speaker."],
-                                     speed=[float(speed)], **kw)[0]
-            p = tempfile.mktemp(suffix=".wav")
-            import soundfile as sf
-            from merge import SR
-            sf.write(p, a, SR)
-            return p
+        if len(r) < 2:
+            continue
+        name = str(r[0]).strip()
+        if not name or name.lower() == "speaker":
+            continue
+        if target and name != target:
+            continue
+        kw = _voice_kwargs({"instruct": str(r[1]) or default_instruct,
+                           "ref_audio": str(r[2]).strip('"').strip("'") if len(r) > 2 else ""})
+        a = get_model().generate(text=[f"Đây là giọng nói của {name}."],
+                                 speed=[float(speed)], **kw)[0]
+        p = tempfile.mktemp(suffix=".wav")
+        import soundfile as sf
+        from merge import SR
+        sf.write(p, a, SR)
+        return p
+    if target:
+        raise gr.Error(f"Không thấy speaker '{target}' trong bảng Voices.")
     raise gr.Error("Bảng Voices trống — thêm ít nhất 1 speaker.")
 
 
@@ -143,13 +153,14 @@ def _import_text(file):
             return f.read()
 
 
-def _export_project(text, mode, script, voices, lex, dinstr, speed, gap, file):
+def _export_project(text, mode, script, voices, lex, dinstr, speed, gap):
+    """Ghi state ra file tạm, trả path cho DownloadButton phục vụ tải về."""
     state = dict(text=text, mode=mode, script=_tolist(script), voices=_tolist(voices),
                  lex=_tolist(lex), dinstr=dinstr, speed=speed, gap=gap)
-    path = file.name if hasattr(file, "name") else SESSION
+    path = tempfile.mktemp(suffix=".json", prefix="voice-audio-project-")
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False)
-    return f"Xuất: {path}"
+        json.dump(state, f, ensure_ascii=False, indent=2)
+    return path
 
 
 def _import_project(file):
@@ -206,11 +217,13 @@ with gr.Blocks(title="voice-audio") as demo:
                      [script_tbl, voice_tbl, lex_tbl, default_instruct, speed, gap],
                      [out_audio, status])
 
-    # Voice preview: render 1 câu kiểm tra từ speaker + instruct/ref dòng đầu tiên của Voices
-    preview_btn = gr.Button("3. Preview giọng", variant="secondary", size="sm")
+    # Voice preview: render 1 câu bằng giọng speaker chọn (trống = dòng đầu bảng Voices).
+    with gr.Row():
+        preview_name = gr.Textbox(label="Speaker preview (trống = dòng đầu)", scale=2)
+        preview_btn = gr.Button("3. Preview giọng", variant="secondary", size="sm", scale=1)
     preview_out = gr.Audio(label="Preview", type="filepath")
     preview_btn.click(_voice_preview,
-                      [voice_tbl, default_instruct, speed],
+                      [voice_tbl, default_instruct, speed, preview_name],
                       preview_out)
 
     # _fields dùng chung cho autosave + import/export (định nghĩa trước khi wiring).
@@ -224,8 +237,8 @@ with gr.Blocks(title="voice-audio") as demo:
     import_btn.upload(_import_project, import_btn, _fields)
     export_btn.click(_export_project,
                      [text, planner_mode, script_tbl, voice_tbl, lex_tbl,
-                      default_instruct, speed, gap, export_btn],
-                     status)
+                      default_instruct, speed, gap],
+                     export_btn)
 
     # Import text từ .txt
     txt_import = gr.UploadButton("📄 Import .txt", file_types=[".txt"], size="sm")
@@ -261,6 +274,13 @@ def _selfcheck():
     r = _load()
     assert r[0] == "xin chào" and r[1] == "llm" and r[6] == 1.5, r
     assert r[2] == [[0, "narrator", "vi", "Câu."]], r[2]
+    # Export: ghi file tạm, đọc lại phải khớp state (không đè session.json).
+    ep = _export_project("hi", "rule", [[0, "narrator", "vi", "Câu."]],
+                         [["a", "female", ""]], [["API", "ây pi ai"]], "male", 1.2, 0.25)
+    assert ep != SESSION and os.path.exists(ep), ep
+    with open(ep, encoding="utf-8") as f:
+        st = json.load(f)
+    assert st["text"] == "hi" and st["speed"] == 1.2, st
     print("selfcheck ok")
 
 
